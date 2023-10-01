@@ -1,15 +1,15 @@
 /*
 This package will receive a buffer that normally contains a JSON object and rebroadcast this
-buffer at different interval to a UDP:Port destination.  For OWLSO the the UDP address should
+buffer at different interval to a UDP:Port destination.  For APP the the UDP address should
 be a network address so that information is broadcasted.  This will iliminate the need
-for setting a static entry in the ARP table of the OWLSO-RELAY.
+for setting a static entry in the ARP table of the APP-RELAY.
 */
 
 package broadcaster
 
 import (
 	"errors"
-	"github.com/antigloss/go/logger"
+	"github.com/marcgauthier/pronto"
 	"math/rand"
 	"net"
 	"strconv"
@@ -81,7 +81,7 @@ func putItemInPool(i *item) {
 }
 
 /* This is the main broadcast function that will at specific intervals broadcast all the devices
-   Start the Broadcast function and send all the devices we know to the OWLSO-GUARD at specific
+   Start the Broadcast function and send all the devices we know to the APP-GUARD at specific
    intervals.  The information is send as a json message by threads that are created by this function.
 
    Broadcast_Multiplier = default 10
@@ -128,7 +128,7 @@ func Start(BroadcasterName string, ToIP string, ToPort, ChannelSize int, workerc
 		broadcastmininterval = 1
 	}
 
-	logger.Trace("Starting Broadcaster " + BroadcasterName + " " + ToIP + ":" + strconv.Itoa(ToPort) + " channel size:" + strconv.Itoa(ChannelSize) + " threads:" + strconv.Itoa(workercount) +
+	pronto.Info("Starting Broadcaster " + BroadcasterName + " " + ToIP + ":" + strconv.Itoa(ToPort) + " channel size:" + strconv.Itoa(ChannelSize) + " threads:" + strconv.Itoa(workercount) +
 		" broadcastMult: " + strconv.FormatInt(Broadcast_Multiplier, 10) + " broadcastMax: " + strconv.FormatInt(broadcastmaxinterval, 10) +
 		" broadcastMin: " + strconv.FormatInt(broadcastmininterval, 10))
 
@@ -184,7 +184,7 @@ func minMax64(min, max, value int64) int64 {
 */
 func Update(Id string, Buffer []byte, randomStartMaxSecs int64) {
 
-	logger.Trace("Receive Update() request for " + Id)
+	pronto.Info("Receive Update() request for " + Id)
 
 	/* either start broadcast now (0) or use a random number
 	 */
@@ -214,7 +214,7 @@ func Update(Id string, Buffer []byte, randomStartMaxSecs int64) {
  */
 func Delete(Id string) error {
 
-	logger.Trace("Receive Delete() request for " + Id)
+	pronto.Info("Receive Delete() request for " + Id)
 
 	// lock the items map.
 	mutexItems.Lock()
@@ -296,14 +296,14 @@ func findItemThatNeedBroadcasting() {
 }
 
 /* This thread go thru the list of items that need to be send, read the item and convert it  into
-   a JSON format string this string is then sent to the OWLSO-GUARD using UDP to an IP or thru
+   a JSON format string this string is then sent to the APP-GUARD using UDP to an IP or thru
    broadcast packet on a /30 network.
 */
 
 func broadcastUDPThread(broadcastToIP string, broadcastToPort int, broadcastmininterval, broadcastmaxinterval, Broadcast_Multiplier int64) {
 
 	if broadcastToIP == "" || (broadcastToPort >= 65536) {
-		logger.Error("broadcastUDPThread() broadcast IP or Port issue " + broadcastToIP + " " + strconv.Itoa(broadcastToPort))
+		pronto.Error("broadcastUDPThread() broadcast IP or Port issue " + broadcastToIP + " " + strconv.Itoa(broadcastToPort))
 		return
 	}
 
@@ -321,7 +321,7 @@ func broadcastUDPThread(broadcastToIP string, broadcastToPort int, broadcastmini
 
 			RemoteAddr, err := net.ResolveUDPAddr("udp", broadcastToIP+":"+strconv.Itoa(int(broadcastToPort)))
 			if err != nil {
-				logger.Error(err.Error())
+				pronto.Error(err.Error())
 				continue
 			}
 
@@ -329,19 +329,19 @@ func broadcastUDPThread(broadcastToIP string, broadcastToPort int, broadcastmini
 			 */
 			conn, err := net.DialUDP("udp", nil, RemoteAddr)
 			if err != nil {
-				logger.Error(err.Error())
+				pronto.Error(err.Error())
 				continue
 			}
 
 			if conn == nil {
-				logger.Error("conn is nil but no error")
+				pronto.Error("conn is nil but no error")
 				continue
 			}
 
 			/* Write must return a non-nil error if it returns n < len(p). Write must not modify the slice data, even temporarily.
 			 */
 			if _, err = conn.Write(item.Buffer[:msgsize]); err != nil {
-				logger.Error(err.Error())
+				pronto.Error(err.Error())
 				continue
 			}
 
@@ -354,7 +354,7 @@ func broadcastUDPThread(broadcastToIP string, broadcastToPort int, broadcastmini
 			item.broadcastStep = minMax64(broadcastmininterval, broadcastmaxinterval, item.broadcastStep*Broadcast_Multiplier)
 			item.nextBroadcast = time.Now().Unix() + item.broadcastStep
 
-			logger.Trace("sent: " + item.ID + " { " + string(item.Buffer) + " } nextBroadcast in " + strconv.FormatInt(item.broadcastStep, 10) + " secs")
+			pronto.Info("sent: " + item.ID + " { " + string(item.Buffer) + " } nextBroadcast in " + strconv.FormatInt(item.broadcastStep, 10) + " secs")
 
 			mutexItems.Lock()
 
